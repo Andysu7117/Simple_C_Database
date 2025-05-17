@@ -36,7 +36,6 @@ int main(int argc, char *argv[]) {
     while (true) {
         printPrompt();
         readInput(inputBuffer);
-
         if (strcmp(inputBuffer->input, "exit") == 0) {
             closeInput(inputBuffer);
             exit(EXIT_SUCCESS);
@@ -52,13 +51,14 @@ int main(int argc, char *argv[]) {
 
 // Prints all commands
 void printCommands() {
-    printf("Commands are:\n");
+    printf("Commands are\n");
     printf("help: prints all commands\n");
     printf("insert: To insert data\n");
     printf("delete: To delete data\n");
     printf("modify: To modify data\n");
     printf("select: To select data\n");
     printf("exit: Exits program\n");
+    printf("\n");
 }
 
 // Prints command prompt insert buffer
@@ -111,8 +111,9 @@ ssize_t getLine(char **linePtr, size_t *n, FILE *stream) {
 
     if (pos == 0 && c == EOF) return -1;
 
-    (*linePtr)[pos] = '\0';
-    return pos;
+    // ignore newline
+    (*linePtr)[pos - 1] = '\0';
+    return pos - 1;
 }
 
 
