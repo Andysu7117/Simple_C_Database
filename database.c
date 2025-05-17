@@ -6,6 +6,14 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+// GLOBAL VARIABLES
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+#define MAX_USERNAME_SIZE 32
+#define MAX_EMAIL_SIZE 255
+
 // TYPEDEFS
 typedef struct {
     char *input;
@@ -13,14 +21,16 @@ typedef struct {
     size_t length;
 } InputBuffer;
 
+typedef struct {
+    UINT32 id;
+    char userName[MAX_USERNAME_SIZE];
+    char email[MAX_EMAIL_SIZE];
+} Row;
 
 // ENUM DEFINITIONS
 
-// GLOBAL VARIABLES
-#ifdef _WIN32
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
-#endif
+#define MAX_INSERT_ARGS 3
+#define SELECT_ARGS
 
 // Program
 void printCommands();
@@ -30,6 +40,11 @@ void readInput(InputBuffer *inputBuffer);
 void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
 void readAndDoCommand(InputBuffer *inputBuffer);
+void doInsert(InputBuffer *inputBuffer);
+void doSelect(InputBuffer *inputBuffer);
+bool isNumber(char *number);
+bool isUserName(char *userName);
+bool isEmail(char *email);
 
 int main(int argc, char *argv[]) {
     printCommands();
@@ -124,13 +139,73 @@ void readAndDoCommand(InputBuffer *inputBuffer) {
         printCommands();
     }  else { 
         char *command = strtok(inputBuffer->input, " ");
-        char *data = strtok(NULL, "\0");
         if (strcmp(command, "insert") == 0) {
-            printCommands();
+            doInsert(inputBuffer);
         } else if (strcmp(command, "select") == 0) {
-            printCommands();
+            doSelect(inputBuffer);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
     } 
+}
+
+void doInsert(InputBuffer *inputBuffer) {
+    char *insert_args[MAX_INSERT_ARGS + 1] = { NULL };
+
+    int len = 0;
+    for (char *arg; (arg = strtok(NULL, " ")) && len < MAX_INSERT_ARGS;) {\
+        if (len == 0) {
+            if (!isNumber(arg)) {
+                printf("invalid id\n");
+                free(insert_args);
+                return;
+            }
+        } else if (len == 1) {
+            if (!isUserName(arg)) {
+                printf("Invalid username\n");
+                free(insert_args);
+                return;
+            }
+        } else {
+            if (!isEmail(arg)) {
+                printf("Invalid email\n");
+                free(insert_args);
+                return;
+            }
+        }
+        insert_args[len] = arg;
+        len++;
+    }
+
+    char *data = strtok(NULL, "\0");
+    printf("Input buffer is: %s\n", data);
+}
+
+void doSelect(InputBuffer *inputBuffer) {
+    char *data = strtok(NULL, "\0");
+    printf("Input buffer is: %s\n", data);
+}
+
+bool isNumber(char *number) {
+    if (atoi(number) == 0) {
+        return false;
+    }
+    
+    return true;
+}
+
+bool isUserName(char *userName) {
+    if (strlen(userName) <= 5) {
+        return false;
+    }
+
+    return true;
+}
+
+bool isEmail(char *email) {
+    if (strstr(email, "@") == NULL) {
+        return false;
+    }
+
+    return true;
 }
