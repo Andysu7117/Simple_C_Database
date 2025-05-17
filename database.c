@@ -29,6 +29,7 @@ InputBuffer *NewInputBuffer();
 void readInput(InputBuffer *inputBuffer);
 void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
+void readAndDoCommand(InputBuffer *inputBuffer);
 
 int main(int argc, char *argv[]) {
     printCommands();
@@ -36,14 +37,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         printPrompt();
         readInput(inputBuffer);
-        if (strcmp(inputBuffer->input, "exit") == 0) {
-            closeInput(inputBuffer);
-            exit(EXIT_SUCCESS);
-        } else if (strcmp(inputBuffer->input, "help") == 0) {
-            printCommands();
-        } else {
-            printf("Unrecognised Command %s\n", inputBuffer->input);
-        }
+        readAndDoCommand(inputBuffer);
     }
 
     return 0;
@@ -121,4 +115,15 @@ ssize_t getLine(char **linePtr, size_t *n, FILE *stream) {
 void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer->input);
     free(inputBuffer);
+}
+
+void readAndDoCommand(InputBuffer *inputBuffer) {
+    if (strcmp(inputBuffer->input, "exit") == 0) {
+        closeInput(inputBuffer);
+        exit(EXIT_SUCCESS);
+    } else if (strcmp(inputBuffer->input, "help") == 0) {
+        printCommands();
+    } else {
+        printf("Unrecognised Command %s\n", inputBuffer->input);
+    }
 }
