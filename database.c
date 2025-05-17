@@ -116,19 +116,21 @@ void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer);
 }
 
-void readAndDoCommand(InputBuffer *inputBuffer) {
-    char *command = strtok(inputBuffer->input, " ");
-
+void readAndDoCommand(InputBuffer *inputBuffer) {   
     if (strcmp(inputBuffer->input, "exit") == 0) {
         closeInput(inputBuffer);
         exit(EXIT_SUCCESS);
     } else if (strcmp(inputBuffer->input, "help") == 0) {
         printCommands();
-    } else if (strcmp(command, "insert") == 0) {
-        printCommands();
-    } else if (strcmp(command, "select") == 0) {
-        printCommands();
-    } else {
-        printf("Unrecognised Command %s\n", command);
-    }
+    }  else { 
+        char *command = strtok(inputBuffer->input, " ");
+        char *data = strtok(NULL, "\0");
+        if (strcmp(command, "insert") == 0) {
+            printCommands();
+        } else if (strcmp(command, "select") == 0) {
+            printCommands();
+        } else {
+            printf("Unrecognised Command %s\n", command);
+        } 
+    } 
 }
