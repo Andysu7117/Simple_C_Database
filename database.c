@@ -153,7 +153,7 @@ void doInsert(InputBuffer *inputBuffer) {
     char *insert_args[MAX_INSERT_ARGS + 1] = { NULL };
 
     int len = 0;
-    for (char *arg; (arg = strtok(NULL, " ")) && len < MAX_INSERT_ARGS;) {\
+    for (char *arg; (arg = strtok(NULL, " ")) && len < MAX_INSERT_ARGS;) {
         if (len == 0) {
             if (!isNumber(arg)) {
                 printf("invalid id\n");
@@ -177,20 +177,23 @@ void doInsert(InputBuffer *inputBuffer) {
         len++;
     }
 
-    char *data = strtok(NULL, "\0");
-    printf("Input buffer is: %s\n", data);
+    Row rowToInsert = {
+        insert_args[0],
+        insert_args[1],
+        insert_args[2]
+    };
+
 }
 
 void doSelect(InputBuffer *inputBuffer) {
-    char *data = strtok(NULL, "\0");
-    printf("Input buffer is: %s\n", data);
+    printf("Input buffer is:\n");
 }
 
 bool isNumber(char *number) {
     if (atoi(number) == 0) {
         return false;
     }
-    
+
     return true;
 }
 
