@@ -111,19 +111,24 @@ ssize_t getLine(char **linePtr, size_t *n, FILE *stream) {
 }
 
 
-
 void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer->input);
     free(inputBuffer);
 }
 
 void readAndDoCommand(InputBuffer *inputBuffer) {
+    char *command = strtok(inputBuffer->input, " ");
+
     if (strcmp(inputBuffer->input, "exit") == 0) {
         closeInput(inputBuffer);
         exit(EXIT_SUCCESS);
     } else if (strcmp(inputBuffer->input, "help") == 0) {
         printCommands();
+    } else if (strcmp(command, "insert") == 0) {
+        printCommands();
+    } else if (strcmp(command, "select") == 0) {
+        printCommands();
     } else {
-        printf("Unrecognised Command %s\n", inputBuffer->input);
+        printf("Unrecognised Command %s\n", command);
     }
 }
