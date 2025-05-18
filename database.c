@@ -103,7 +103,10 @@ bool insertArgsCheck(char *arg, int len);
 bool validRow(uint32_t selectedRow, Table *table);
 void printTable(Table *table);
 void *getPage(Pager *pager, uint32_t pageNum);
-
+void *cursorValue(Cursor *cursor);
+void cursorAdvance(Cursor *cursor);
+Cursor *tableStart(Table *table);
+Cursor *tableEnd(Table *table);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -280,7 +283,7 @@ void doSelect(InputBuffer *inputBuffer, Table *table) {
     cursor->rowNum = rowSelected;
     deserialiseRow(cursorValue(cursor), &row);
     printRow(&row);
-    
+
     free(cursor);
 }
 
@@ -501,10 +504,12 @@ void pagerFlush(Pager* pager, uint32_t pageNum, uint32_t size) {
 }
 
 void printTable(Table *table) {
-    for (uint32_t i = 0; i < table->noRows; i++) {
-        Row row;
-        deserialiseRow(rowSlot(table, i), &row);
+    Cursor *cursor = tableStart(table);
+    Row row;
+    while (!(cursor->endOfTable)) {
+        deserialiseRow(cursorValue(cursor), &row);
         printRow(&row);
+        cursorAdvance(cursor);
     }
 } 
 
