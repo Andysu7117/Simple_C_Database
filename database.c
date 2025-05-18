@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
 
@@ -14,6 +15,23 @@ typedef SSIZE_T ssize_t;
 #define MAX_USERNAME_SIZE 32
 #define MAX_EMAIL_SIZE 255
 
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+
+#define ID_SIZE size_of_attribute(Row, id)
+#define USERNAME_SIZE (sizeof(char) * MAX_USERNAME_SIZE)
+#define EMAIL_SIZE (sizeof(char) * MAX_EMAIL_SIZE)
+#define ID_OFFSET 0
+#define USERNAME_OFFSET (ID_OFFSET + ID_SIZE)
+#define EMAIL_OFFSET (USERNAME_OFFSET + USERNAME_SIZE)
+#define ROW_SIZE (ID_SIZE + USERNAME_SIZE + EMAIL_SIZE)
+
+#define PAGE_SIZE 4096
+#define TABLE_MAX_PAGES 100
+#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
+#define TABLE_MAX_ROWS (ROWS_PER_PAGE * TABLE_MAX_PAGES)
+
+#define MAX_INSERT_ARGS 3
+#define SELECT_ARGS
 // TYPEDEFS
 typedef struct {
     char *input;
@@ -22,15 +40,18 @@ typedef struct {
 } InputBuffer;
 
 typedef struct {
-    UINT32 id;
-    char userName[MAX_USERNAME_SIZE];
-    char email[MAX_EMAIL_SIZE];
+    uint32_t id;
+    char *userName;
+    char *email;
 } Row;
+
+typedef struct {
+    uint32_t noRows;
+    void *pages[TABLE_MAX_PAGES];
+} Table;
 
 // ENUM DEFINITIONS
 
-#define MAX_INSERT_ARGS 3
-#define SELECT_ARGS
 
 // Program
 void printCommands();
@@ -39,20 +60,28 @@ InputBuffer *NewInputBuffer();
 void readInput(InputBuffer *inputBuffer);
 void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
-void readAndDoCommand(InputBuffer *inputBuffer);
-void doInsert(InputBuffer *inputBuffer);
+void readAndDoCommand(InputBuffer *inputBuffer, Table *table);
+void doInsert(InputBuffer *inputBuffer, Table *table);
 void doSelect(InputBuffer *inputBuffer);
 bool isNumber(char *number);
 bool isUserName(char *userName);
 bool isEmail(char *email);
+void printRow(Row *row);
+void serialiseRow(Row *source, void *destination);
+void deserialiseRow(void *source, Row *destination);
+void *rowSlot(Table *table, uint32_t rowNum);
+Table *NewTable();
+void FreeTable();
+bool insertArgsCheck(char *arg, int len);
 
 int main(int argc, char *argv[]) {
+    Table *table = NewTable(); 
     printCommands();
     InputBuffer *inputBuffer = NewInputBuffer();
     while (true) {
         printPrompt();
         readInput(inputBuffer);
-        readAndDoCommand(inputBuffer);
+        readAndDoCommand(inputBuffer, table);
     }
 
     return 0;
@@ -131,7 +160,7 @@ void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer);
 }
 
-void readAndDoCommand(InputBuffer *inputBuffer) {   
+void readAndDoCommand(InputBuffer *inputBuffer, Table *table) {   
     if (strcmp(inputBuffer->input, "exit") == 0) {
         closeInput(inputBuffer);
         exit(EXIT_SUCCESS);
@@ -140,7 +169,7 @@ void readAndDoCommand(InputBuffer *inputBuffer) {
     }  else { 
         char *command = strtok(inputBuffer->input, " ");
         if (strcmp(command, "insert") == 0) {
-            doInsert(inputBuffer);
+            doInsert(inputBuffer, table);
         } else if (strcmp(command, "select") == 0) {
             doSelect(inputBuffer);
         } else {
@@ -149,40 +178,46 @@ void readAndDoCommand(InputBuffer *inputBuffer) {
     } 
 }
 
-void doInsert(InputBuffer *inputBuffer) {
+void doInsert(InputBuffer *inputBuffer, Table *table) {
     char *insert_args[MAX_INSERT_ARGS + 1] = { NULL };
 
     int len = 0;
     for (char *arg; (arg = strtok(NULL, " ")) && len < MAX_INSERT_ARGS;) {
-        if (len == 0) {
-            if (!isNumber(arg)) {
-                printf("invalid id\n");
-                free(insert_args);
-                return;
-            }
-        } else if (len == 1) {
-            if (!isUserName(arg)) {
-                printf("Invalid username\n");
-                free(insert_args);
-                return;
-            }
-        } else {
-            if (!isEmail(arg)) {
-                printf("Invalid email\n");
-                free(insert_args);
-                return;
-            }
+        if (!insertArgsCheck(arg, len)) {
+            return;
         }
         insert_args[len] = arg;
         len++;
     }
 
-    Row rowToInsert = {
-        insert_args[0],
-        insert_args[1],
-        insert_args[2]
-    };
+    Row *rowToInsert = malloc(sizeof(Row));
+    rowToInsert->id = atoi(insert_args[0]);
+    rowToInsert->userName = strdup(insert_args[1]);
+    rowToInsert->email = strdup(insert_args[2]);
+    printRow(rowToInsert);
 
+}
+
+bool insertArgsCheck(char *arg, int len) {
+    if (len == 0) {
+        if (!isNumber(arg)) {
+            printf("invalid id\n");
+            return false;
+        }
+    } else if (len == 1) {
+        if (!isUserName(arg)) {
+            printf("Invalid username\n");
+            return false;
+        }
+        printf("length = 1 argis %s\n", arg);
+    } else {
+        if (!isEmail(arg)) {
+            printf("Invalid email\n");
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void doSelect(InputBuffer *inputBuffer) {
@@ -211,4 +246,51 @@ bool isEmail(char *email) {
     }
 
     return true;
+}
+
+void printRow(Row *row) {
+    printf("%d, %s, %s\n", row->id, row->userName, row->email);
+}
+
+void serialiseRow(Row *source, void *destination) {
+    memcpy((char *)destination + ID_OFFSET, &(source->id), ID_SIZE);
+    memcpy((char *)destination + USERNAME_OFFSET, &(source->userName), USERNAME_SIZE);
+    memcpy((char *)destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+}
+
+void deserialiseRow(void *source, Row *destination) {
+    memcpy(&(destination->id), (char *)source + ID_OFFSET, ID_SIZE);
+    memcpy(&(destination->userName), (char *)source + USERNAME_OFFSET, USERNAME_SIZE);
+    memcpy(&(destination->email), (char *)source + EMAIL_OFFSET, EMAIL_SIZE);
+}
+
+void *rowSlot(Table *table, uint32_t rowNum) {
+    uint32_t pageNum = rowNum / ROWS_PER_PAGE;
+    void *page = table->pages[pageNum];
+    if (page == NULL) {
+        page = table->pages[pageNum] = malloc(PAGE_SIZE);
+    }
+
+    uint32_t rowOffset = rowNum % ROWS_PER_PAGE;
+    uint32_t byteOffset = rowOffset * ROW_SIZE;
+    return ((char *)page + byteOffset);
+}
+
+Table *NewTable() {
+    Table *table = malloc(sizeof(Table));
+
+    table->noRows = 0;
+    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+        table->pages[i] = NULL;
+    }
+
+    return table;
+}
+
+void FreeTable(Table *table) {
+    for (uint32_t i = 0; table->pages[i]; i++) {
+        free(table->pages[i]);
+    }
+
+    free(table);
 }
