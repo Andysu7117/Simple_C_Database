@@ -69,10 +69,16 @@ typedef struct {
     Pager *pager;
 } Table;
 
+typedef struct {
+    Table *table;
+    uint32_t rowNum;
+    bool endOfTable;
+} Cursor;
+
 // ENUM DEFINITIONS
 
 
-// Program
+// Function Prototypes
 void printCommands();
 void printPrompt();
 InputBuffer *NewInputBuffer();
@@ -88,7 +94,7 @@ bool isEmail(char *email);
 void printRow(Row *row);
 void serialiseRow(Row *source, void *destination);
 void deserialiseRow(void *source, Row *destination);
-void *rowSlot(Table *table, uint32_t rowNum);
+void *cursorValue(Cursor *cursor);
 Table *databaseOpen(char *fileName);
 void databaseClose(Table* table);
 Pager *pagerOpen(char *filename);
@@ -98,6 +104,8 @@ bool validRow(uint32_t selectedRow, Table *table);
 void printTable(Table *table);
 void *getPage(Pager *pager, uint32_t pageNum);
 
+
+//Program
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         printf("Please provide a database file or only 1 database file\n");
@@ -229,10 +237,13 @@ void doInsert(InputBuffer *inputBuffer, Table *table) {
     rowToInsert->id = table->currId;
     strncpy(rowToInsert->userName, insert_args[0], MAX_USERNAME_SIZE);
     strncpy(rowToInsert->email, insert_args[1], MAX_EMAIL_SIZE);
-    serialiseRow(rowToInsert, rowSlot(table, table->noRows));
+
+    Cursor *cursor = tableEnd(table);    
+    serialiseRow(rowToInsert, cursorValue(cursor));
     table->noRows += 1;
     table->currId += 1;
     free(rowToInsert);
+    free(cursor);
     printf("Inserted Successfully\n");
 }
 
@@ -265,8 +276,12 @@ void doSelect(InputBuffer *inputBuffer, Table *table) {
     }
 
     Row row;
-    deserialiseRow(rowSlot(table, rowSelected), &row);
+    Cursor *cursor = tableStart(table);
+    cursor->rowNum = rowSelected;
+    deserialiseRow(cursorValue(cursor), &row);
     printRow(&row);
+    
+    free(cursor);
 }
 
 bool validRow(uint32_t selectedRow, Table *table) {
@@ -318,13 +333,22 @@ void deserialiseRow(void *source, Row *destination) {
     memcpy(&(destination->email), (char *)source + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
-void *rowSlot(Table *table, uint32_t rowNum) {
+void *cursorValue(Cursor *cursor) {
+    uint32_t rowNum = cursor->rowNum;
     uint32_t pageNum = rowNum / ROWS_PER_PAGE;
-    void *page = getPage(table->pager, pageNum);
 
+    void *page = getPage(cursor->table->pager, pageNum);
     uint32_t rowOffset = rowNum % ROWS_PER_PAGE;
-    uint32_t byteOffset = rowOffset * ROW_SIZE;
+    uint32_t byteOffset = rowOffset * ROW_SIZE;   
+
     return ((char *)page + byteOffset);
+}
+
+void cursorAdvance(Cursor *cursor) {
+    cursor->rowNum += 1;
+    if (cursor->rowNum >= cursor->table->noRows) {
+        cursor->endOfTable = true;
+    }
 }
 
 void *getPage(Pager *pager, uint32_t pageNum) {
@@ -483,3 +507,21 @@ void printTable(Table *table) {
         printRow(&row);
     }
 } 
+
+Cursor *tableStart(Table *table) {
+    Cursor *cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->rowNum = 0;
+    cursor->endOfTable = (table->noRows == 0);
+
+    return cursor;
+}
+
+Cursor *tableEnd(Table *table) {
+    Cursor *cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->rowNum = table->noRows;
+    cursor->endOfTable = true;
+
+    return cursor;
+}
