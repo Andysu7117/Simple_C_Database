@@ -30,7 +30,7 @@ typedef SSIZE_T ssize_t;
 #define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
 #define TABLE_MAX_ROWS (ROWS_PER_PAGE * TABLE_MAX_PAGES)
 
-#define MAX_INSERT_ARGS 3
+#define MAX_INSERT_ARGS 2
 #define SELECT_ARGS
 // TYPEDEFS
 typedef struct {
@@ -41,8 +41,8 @@ typedef struct {
 
 typedef struct {
     uint32_t id;
-    char *userName;
-    char *email;
+    char userName[MAX_USERNAME_SIZE];
+    char email[MAX_EMAIL_SIZE];
 } Row;
 
 typedef struct {
@@ -62,7 +62,7 @@ void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
 void readAndDoCommand(InputBuffer *inputBuffer, Table *table);
 void doInsert(InputBuffer *inputBuffer, Table *table);
-void doSelect(InputBuffer *inputBuffer);
+void doSelect(InputBuffer *inputBuffer, Table *table);
 bool isNumber(char *number);
 bool isUserName(char *userName);
 bool isEmail(char *email);
@@ -73,6 +73,8 @@ void *rowSlot(Table *table, uint32_t rowNum);
 Table *NewTable();
 void FreeTable();
 bool insertArgsCheck(char *arg, int len);
+bool validRow(uint32_t selectedRow, Table *table);
+void printTable(Table *table);
 
 int main(int argc, char *argv[]) {
     Table *table = NewTable(); 
@@ -131,14 +133,14 @@ ssize_t getLine(char **linePtr, size_t *n, FILE *stream) {
 
     if (*linePtr == NULL || *n == 0) {
         *n = chunk;
-        *linePtr = malloc(*n * sizeof(char *));
+        *linePtr = malloc(*n * sizeof(char));
         if (*linePtr == NULL) return -1;
     }
 
     while ((c = fgetc(stream)) != EOF) {
         if (pos + 1 >= *n) {
             *n += chunk;
-            char *newPtr = realloc(*linePtr, *n * sizeof(char *));
+            char *newPtr = realloc(*linePtr, *n * sizeof(char));
             if (!newPtr) return -1;
             *linePtr = newPtr;
         }
@@ -171,7 +173,7 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table *table) {
         if (strcmp(command, "insert") == 0) {
             doInsert(inputBuffer, table);
         } else if (strcmp(command, "select") == 0) {
-            doSelect(inputBuffer);
+            doSelect(inputBuffer, table);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
@@ -191,25 +193,22 @@ void doInsert(InputBuffer *inputBuffer, Table *table) {
     }
 
     Row *rowToInsert = malloc(sizeof(Row));
-    rowToInsert->id = atoi(insert_args[0]);
-    rowToInsert->userName = strdup(insert_args[1]);
-    rowToInsert->email = strdup(insert_args[2]);
-    printRow(rowToInsert);
-
+    rowToInsert->id = table->noRows;
+    strncpy(rowToInsert->userName, insert_args[0], MAX_USERNAME_SIZE);
+    strncpy(rowToInsert->email, insert_args[1], MAX_EMAIL_SIZE);
+    serialiseRow(rowToInsert, rowSlot(table, table->noRows));
+    table->noRows += 1;
+    free(rowToInsert);
+    printf("Inserted Successfully\n");
+    printTable(table);
 }
 
 bool insertArgsCheck(char *arg, int len) {
     if (len == 0) {
-        if (!isNumber(arg)) {
-            printf("invalid id\n");
-            return false;
-        }
-    } else if (len == 1) {
         if (!isUserName(arg)) {
             printf("Invalid username\n");
             return false;
         }
-        printf("length = 1 argis %s\n", arg);
     } else {
         if (!isEmail(arg)) {
             printf("Invalid email\n");
@@ -220,13 +219,35 @@ bool insertArgsCheck(char *arg, int len) {
     return true;
 }
 
-void doSelect(InputBuffer *inputBuffer) {
-    printf("Input buffer is:\n");
+void doSelect(InputBuffer *inputBuffer, Table *table) {
+    char *selectedRow = strtok(NULL, " ");
+    if (!isNumber(selectedRow)) {
+        printf("Invalid row\n");
+        return;
+    }
+    uint32_t rowSelected = atoi(selectedRow);
+    if (!validRow(rowSelected, table)) {
+        printf("Row selected is too large\n");
+        return;
+    }
+
+    Row row;
+    deserialiseRow(rowSlot(table, rowSelected), &row);
+    printRow(&row);
+}
+
+bool validRow(uint32_t selectedRow, Table *table) {
+    if (selectedRow >= table->noRows) {
+        return false;
+    }
+
+    return true;
 }
 
 bool isNumber(char *number) {
-    if (atoi(number) == 0) {
-        return false;
+    if (number == NULL || *number == '\0') return false;
+    for (int i = 0; number[i]; i++) {
+        if (number[i] < '0' || number[i] > '9') return false;
     }
 
     return true;
@@ -294,3 +315,13 @@ void FreeTable(Table *table) {
 
     free(table);
 }
+
+void printTable(Table *table) {
+    for (uint32_t i = 0; i < table->noRows; i++) {
+        uint32_t pageNum = i / ROWS_PER_PAGE;
+        printf("Page %d ", pageNum);
+        Row row;
+        deserialiseRow(rowSlot(table, i), &row);
+        printRow(&row);
+    }
+} 
