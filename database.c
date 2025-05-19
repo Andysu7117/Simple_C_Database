@@ -520,29 +520,45 @@ void *getPage(Pager *pager, uint32_t pageNum) {
     if (pager->pages[pageNum] == NULL) {
         // Cache miss. Allocate memory and load from file.
         void* page = malloc(PAGE_SIZE);
-        
+
+        if (page == NULL) {
+            printf("Error allocating memory\n");
+            exit(EXIT_FAILURE);
+        }
+
+        uint32_t numPagesInFile = pager->fileLength / PAGE_SIZE;
+        if (pageNum < numPagesInFile) {
+            lseek(pager->fileDescriptor, pageNum * PAGE_SIZE, SEEK_SET);
+            ssize_t bytes_read = read(pager->fileDescriptor, page, PAGE_SIZE);
+
+            if (bytes_read == -1) {
+                printf("Error reading file: %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            memset(page, 0, PAGE_SIZE);
+        }
+
         pager->pages[pageNum] = page;
 
         if (pageNum >= pager->numPages) {
             pager->numPages = pageNum + 1;
-            // lseek(pager->fileDescriptor, pageNum * PAGE_SIZE, SEEK_SET);
-            // ssize_t bytes_read = read(pager->fileDescriptor, page, PAGE_SIZE);
-
-            // if (bytes_read == -1) {
-            //     printf("Error reading file: %d\n", errno);
-            //     exit(EXIT_FAILURE);
-            // }
         }
-
     }
 
     return pager->pages[pageNum];    
 }
 
+void printPageHex(void *page, size_t numBytes) {
+    uint8_t *bytes = (uint8_t *)page;
+    for (size_t i = 0; i < numBytes; i++) {
+        printf("%02X ", bytes[i]);
+    }
+    printf("\n");
+}
+
 Table *databaseOpen(char *fileName) {
     Pager *pager = pagerOpen(fileName);
-
-    
 
     Table *table = malloc(sizeof(Table));
     table->rootPageNum = 0;
@@ -550,6 +566,7 @@ Table *databaseOpen(char *fileName) {
 
     if (pager->numPages == 0) {
         void *rootNode = getPage(pager, 0);
+        printPageHex(rootNode, 16);
         initialiseLeafNode(rootNode);
         setNodeRoot(rootNode, true);
     }
