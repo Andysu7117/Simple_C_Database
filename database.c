@@ -549,13 +549,6 @@ void *getPage(Pager *pager, uint32_t pageNum) {
     return pager->pages[pageNum];    
 }
 
-void printPageHex(void *page, size_t numBytes) {
-    uint8_t *bytes = (uint8_t *)page;
-    for (size_t i = 0; i < numBytes; i++) {
-        printf("%02X ", bytes[i]);
-    }
-    printf("\n");
-}
 
 Table *databaseOpen(char *fileName) {
     Pager *pager = pagerOpen(fileName);
@@ -566,7 +559,6 @@ Table *databaseOpen(char *fileName) {
 
     if (pager->numPages == 0) {
         void *rootNode = getPage(pager, 0);
-        printPageHex(rootNode, 16);
         initialiseLeafNode(rootNode);
         setNodeRoot(rootNode, true);
     }
