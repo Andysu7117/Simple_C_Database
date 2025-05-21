@@ -731,6 +731,10 @@ void cursorAdvance(Cursor *cursor) {
     }
 }
 
+uint32_t *leafNodeNextLeaf(void *node) {
+    return ((uint32_t *)node + LEAF_NODE_NEXT_LEAF_OFFSET);
+}
+
 uint32_t *leafNodenumCells(void *node) {
     return (uint32_t *)node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
@@ -750,6 +754,7 @@ void *leafNodeValue(void *node, uint32_t cellNum) {
 void initialiseLeafNode(void *node) {
     setNodeType(node, LEAF_NODE);
     *leafNodenumCells(node) = 0;
+    *leafNodeNextLeaf(node) = 0;
 }
 
 void indent(uint32_t level) {
