@@ -87,6 +87,7 @@ typedef SSIZE_T ssize_t;
 #define INTERNAL_NODE_RIGHT_CHILD_SIZE sizeof(uint32_t)
 #define INTERNAL_NODE_RIGHT_CHILD_OFFSET (INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE)
 #define INTERNAL_NODE_HEADER_SIZE (COMMON_NODE_HEADER_SIZE + INTERNAL_NODE_NUM_KEYS_SIZE + INTERNAL_NODE_RIGHT_CHILD_SIZE)
+#define INTERNAL_NODE_MAX_CELLS 3
 
 /*
 * Internal Node Body Layout
@@ -471,6 +472,21 @@ uint32_t internalNodeFindChild(void *node, uint32_t key) {
     }
 
     return minIndex;
+}
+
+void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum) {
+    void *parent = getPage(table->pager, parentPagenum);
+    void *child = getPage(table->pager, childPageNum);
+    uint32_t childMaxKey = getNodeMaxKey(child);
+    uint32_t index = internalNodeFindChild(parent, childMaxKey);
+
+    uint32_t originalNumKeys = internalNodeNumKeys(parent);
+    *internalNodeNumKeys(parent) = originalNumKeys + 1;
+
+    if (originalNumKeys >= INTERNAL_NODE_MAX_CELLS) {
+        printf("Need to implement splitting internal node");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void doSelect(InputBuffer *inputBuffer, Table *table) {
