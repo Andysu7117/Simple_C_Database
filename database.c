@@ -26,6 +26,7 @@ typedef SSIZE_T ssize_t;
 
 #define MAX_USERNAME_SIZE 32
 #define MAX_EMAIL_SIZE 255
+#define INVALID_PAGE_NUM UINT32_MAX
 
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
 
@@ -481,15 +482,39 @@ uint32_t internalNodeFindChild(void *node, uint32_t key) {
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum) {
     void *parent = getPage(table->pager, parentPagenum);
     void *child = getPage(table->pager, childPageNum);
-    uint32_t childMaxKey = getNodeMaxKey(child);
+    uint32_t childMaxKey = getNodeMaxKey(table->pager, child);
     uint32_t index = internalNodeFindChild(parent, childMaxKey);
 
     uint32_t originalNumKeys = *internalNodeNumKeys(parent);
-    *internalNodeNumKeys(parent) = originalNumKeys + 1;
 
     if (originalNumKeys >= INTERNAL_NODE_MAX_CELLS) {
-        printf("Need to implement splitting internal node");
-        exit(EXIT_FAILURE);
+        internalNodeSplitAndInsert(table, parentPagenum);
+        return;
+    }
+
+    uint32_t rightChildPageNum = *internalNodeRightChild(parent);
+
+    if (rightChildPageNum == INVALID_PAGE_NUM) {
+        *internalNodeRightChild(parent) = childPageNum;
+        return;
+    }
+
+        void *rightChild = getPage(table->pager, rightChildPageNum);
+    *internalNodeNumKeys(parent) = originalNumKeys + 1;
+
+    if (childMaxKey > getNodeMaxKey(table->pager, rightChild)) {
+        *internalNodeChild(parent, originalNumKeys) = rightChildPageNum;
+        *internalNodeKey(parent, originalNumKeys) = getNodeMaxKey(table->pager, rightChild);
+        *internalNodeRightChild(parent) = childPageNum;
+    } else {
+        for (uint32_t i = originalNumKeys; i > index; i--) {
+            void *destination = internalNodeCell(parent, i);
+            void *source = internalNodeCell(parent, i - 1);
+            memcpy(destination, source, INTERNAL_NODE_CELL_SIZE);
+        }
+
+        *internalNodeChild(parent, index) = childPageNum;
+        *internalNodeKey(parent, index) = childMaxKey;
     }
 }
 
