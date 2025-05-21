@@ -185,6 +185,10 @@ void printTree(Pager *pager, uint32_t pageNum, uint32_t indentationLevel);
 void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value);
 Cursor *internalNodeFind(Table *table, uint32_t pageNum, uint32_t key);
 uint32_t *leafNodeNextLeaf(void *node);
+uint32_t *nodeParent(void *node);
+void updateInternalNodeKey(void *node, uint32_t oldKey, uint32_t newKey);
+uint32_t internalNodeFindChild(void *node, uint32_t key);
+void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -480,7 +484,7 @@ void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPage
     uint32_t childMaxKey = getNodeMaxKey(child);
     uint32_t index = internalNodeFindChild(parent, childMaxKey);
 
-    uint32_t originalNumKeys = internalNodeNumKeys(parent);
+    uint32_t originalNumKeys = *internalNodeNumKeys(parent);
     *internalNodeNumKeys(parent) = originalNumKeys + 1;
 
     if (originalNumKeys >= INTERNAL_NODE_MAX_CELLS) {
@@ -912,7 +916,7 @@ uint32_t *internalNodeChild(void *node, uint32_t childNum) {
 }
 
 uint32_t *internalNodeKey(void *node, uint32_t keyNum) {
-    return internalNodeCell(node, keyNum) + INTERNAL_NODE_RIGHT_CHILD_SIZE;
+    return (uint32_t *)internalNodeCell(node, keyNum) + INTERNAL_NODE_CHILD_SIZE;
 }
 
 uint32_t getNodeMaxKey(void *node) {
