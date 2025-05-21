@@ -914,6 +914,8 @@ void initialiseInternalNode(void *node) {
     setNodeType(node, INTERNAL_NODE);
     setNodeRoot(node, false);
     *internalNodeNumKeys(node) = 0;
+
+    *internalNodeRightChild(node) = INVALID_PAGE_NUM;
 }
 
 uint32_t *internalNodeNumKeys(void *node) {
@@ -934,9 +936,20 @@ uint32_t *internalNodeChild(void *node, uint32_t childNum) {
         printf("Tried to access childNum %d > numKeys %d\n", childNum, numKeys);
         exit(EXIT_FAILURE);
     } else if (childNum == numKeys) {
-        return internalNodeRightChild(node);
+        uint32_t *rightChild = internalNodeRightChild(node);
+        if (*rightChild == INVALID_PAGE_NUM) {
+            printf("Tried to access right child of node, but was invalid page\n");
+            exit(EXIT_FAILURE);
+        }
+        return rightChild;
     } else {
         return internalNodeCell(node, childNum);
+        uint32_t *child = internalNodeCell(node, childNum);
+        if (*child == INVALID_PAGE_NUM) {
+            printf("Tried to access child %d of node, but was invalid page\n", childNum);
+            exit(EXIT_FAILURE);
+        }
+        return child;
     }
 }
 
