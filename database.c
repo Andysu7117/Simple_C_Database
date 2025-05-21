@@ -192,6 +192,7 @@ int main(int argc, char *argv[]) {
     }
     char *fileName = argv[1];
     Table *table = databaseOpen(fileName);
+    printConstants();
     printCommands();
     InputBuffer *inputBuffer = NewInputBuffer();
     while (true) {
@@ -387,6 +388,8 @@ void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
     uint32_t newPageNum = getUnusedPageNum(cursor->table->pager);
     void *newNode = getPage(cursor->table->pager, newPageNum);
     initialiseLeafNode(newNode);
+    *leafNodeNextLeaf(newNode) = *leafNodeNextLeaf(prevNode);
+    *leafNodeNextLeaf(prevNode) = newPageNum;
 
     for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
         void *destNode;
@@ -399,7 +402,7 @@ void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
         void *destination = leafNodeCell(destNode, indexWithinNode);
 
         if (i == cursor->cellNum) {
-            serialiseRow(value, destination);
+            serialiseRow(value, leafNodeValue(destNode, indexWithinNode));
         } else if (i > cursor->cellNum) {
             memcpy(destination, leafNodeCell(prevNode, i - 1), LEAF_NODE_CELL_SIZE);
         } else {
