@@ -183,6 +183,7 @@ void indent(uint32_t level);
 void printTree(Pager *pager, uint32_t pageNum, uint32_t indentationLevel);
 void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value);
 Cursor *internalNodeFind(Table *table, uint32_t pageNum, uint32_t key);
+uint32_t *leafNodeNextLeaf(void *node);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -385,9 +386,11 @@ void leafNodeInsert(Cursor *cursor, uint32_t key, Row *value) {
 
 void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
     void *prevNode = getPage(cursor->table->pager, cursor->pageNum);
+    uint32_t prevMax = getNodeMaxKey(prevNode);
     uint32_t newPageNum = getUnusedPageNum(cursor->table->pager);
     void *newNode = getPage(cursor->table->pager, newPageNum);
     initialiseLeafNode(newNode);
+    *nodeParent(newNode) = *nodeParent(prevNode);
     *leafNodeNextLeaf(newNode) = *leafNodeNextLeaf(prevNode);
     *leafNodeNextLeaf(prevNode) = newPageNum;
 
@@ -416,8 +419,13 @@ void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
     if (isNodeRoot(prevNode)) {
         createNewRoot(cursor->table, newPageNum);
     } else {
-        printf("Need to implement updating parent after split\n");
-        exit(EXIT_FAILURE);
+        uint32_t parentPageNum = *nodeParent(prevNode);
+        uint32_t newMax = getNodeMaxKey(prevNode);
+        void *parent = getPage(cursor->table->pager, parentPageNum);
+
+        updateInternalNodeKey(parent, prevMax, newMax);
+        internalNodeInsert(cursor->table, parentPageNum, newPageNum);
+        return;
     }
 }
 
