@@ -433,6 +433,11 @@ uint32_t *nodeParent(void *node) {
     return ((uint32_t *)node + PARENT_POINTER_OFFSET);
 }
 
+void updateInternalNodeKey(void *node, uint32_t oldKey, uint32_t newKey) {
+    uint32_t oldChildIndex = internalNodeFindChild(node, oldKey);
+    *internalNodeKey(node, oldChildIndex) = newKey;
+}
+
 Cursor *internalNodeFind(Table *table, uint32_t pageNum, uint32_t key) {
     void *node = getPage(table->pager, pageNum);
     uint32_t numKeys = *internalNodeNumKeys(node);
