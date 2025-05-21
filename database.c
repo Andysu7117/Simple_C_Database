@@ -440,6 +440,20 @@ void updateInternalNodeKey(void *node, uint32_t oldKey, uint32_t newKey) {
 
 Cursor *internalNodeFind(Table *table, uint32_t pageNum, uint32_t key) {
     void *node = getPage(table->pager, pageNum);
+
+    uint32_t childIndex = internalNodeFindChild(node, key);
+    uint32_t childNum = *internalNodeChild(node, childIndex);
+    void *child = getPage(table->pager, childNum);
+    NodeType type = getNodeType(child);
+
+    if (type == LEAF_NODE) {
+        return leafNodeFind(table, childNum, key);
+    } else {
+        return internalNodeFind(table, childNum, key);
+    }
+}
+
+uint32_t internalNodeFindChild(void *node, uint32_t key) {
     uint32_t numKeys = *internalNodeNumKeys(node);
 
     uint32_t minIndex = 0;
@@ -456,15 +470,7 @@ Cursor *internalNodeFind(Table *table, uint32_t pageNum, uint32_t key) {
         }
     }
 
-    uint32_t childNum = *internalNodeChild(node, minIndex);
-    void *child = getPage(table->pager, childNum);
-    NodeType type = getNodeType(child);
-
-    if (type == LEAF_NODE) {
-        return leafNodeFind(table, childNum, key);
-    } else {
-        return internalNodeFind(table, childNum, key);
-    }
+    return minIndex;
 }
 
 void doSelect(InputBuffer *inputBuffer, Table *table) {
