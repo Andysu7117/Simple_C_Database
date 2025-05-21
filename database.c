@@ -850,6 +850,8 @@ void createNewRoot(Table *table, uint32_t rightChildPageNum) {
     uint32_t leftChildMaxKey = getNodeMaxKey(leftChild);
     *internalNodeKey(root, 0) = leftChildMaxKey;
     *internalNodeRightChild(root) = rightChildPageNum; 
+    *nodeParent(leftChild) = table->rootPageNum;
+    *nodeParent(rightChild) = table->rootPageNum;
 }
 
 void initialiseInternalNode(void *node) {
