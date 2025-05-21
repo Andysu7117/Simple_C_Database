@@ -178,7 +178,7 @@ uint32_t *internalNodeRightChild(void *node);
 uint32_t *internalNodeCell(void *node, uint32_t cellNum);
 uint32_t *internalNodeChild(void *node, uint32_t childNum);
 uint32_t *internalNodeKey(void *node, uint32_t keyNum);
-uint32_t getNodeMaxKey(void *node);
+uint32_t getNodeMaxKey(Pager *pager, void *node);
 bool isNodeRoot(void *node);
 void setNodeRoot(void *node, bool isRoot);
 void indent(uint32_t level);
@@ -190,6 +190,8 @@ uint32_t *nodeParent(void *node);
 void updateInternalNodeKey(void *node, uint32_t oldKey, uint32_t newKey);
 uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
+void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
+
 
 //Program
 int main(int argc, char *argv[]) {
@@ -218,7 +220,7 @@ void printCommands() {
     printf("insert: To insert data input as 'insert <username> <email>'\n");
     printf("delete: To delete data 'delete id/username/email'\n");
     printf("modify: To modify data 'modify username/email <username/email> <newusername/newemail>'\n");
-    printf("select: To select data 'select <row>'\n");
+    printf("select: To select data 'select'\n");
     printf("tree: prints the bst\n");
     printf("print: Prints all data\n");
     printf("exit: Exits program\n");
@@ -392,7 +394,7 @@ void leafNodeInsert(Cursor *cursor, uint32_t key, Row *value) {
 
 void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
     void *prevNode = getPage(cursor->table->pager, cursor->pageNum);
-    uint32_t prevMax = getNodeMaxKey(prevNode);
+    uint32_t prevMax = getNodeMaxKey(cursor->table->pager, prevNode);
     uint32_t newPageNum = getUnusedPageNum(cursor->table->pager);
     void *newNode = getPage(cursor->table->pager, newPageNum);
     initialiseLeafNode(newNode);
@@ -426,7 +428,7 @@ void leafNodeSplitAndInsert(Cursor *cursor, uint32_t key, Row *value) {
         createNewRoot(cursor->table, newPageNum);
     } else {
         uint32_t parentPageNum = *nodeParent(prevNode);
-        uint32_t newMax = getNodeMaxKey(prevNode);
+        uint32_t newMax = getNodeMaxKey(cursor->table->pager, prevNode);
         void *parent = getPage(cursor->table->pager, parentPageNum);
 
         updateInternalNodeKey(parent, prevMax, newMax);
@@ -488,7 +490,7 @@ void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPage
     uint32_t originalNumKeys = *internalNodeNumKeys(parent);
 
     if (originalNumKeys >= INTERNAL_NODE_MAX_CELLS) {
-        internalNodeSplitAndInsert(table, parentPagenum);
+        internalNodeSplitAndInsert(table, parentPagenum, childPageNum);
         return;
     }
 
@@ -545,9 +547,9 @@ void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t c
         initialiseInternalNode(newNode);
     }
 
-    uint32_t prevNumKeys = internalNodeNumKeys(prevNode);
+    uint32_t *prevNumKeys = internalNodeNumKeys(prevNode);
 
-    uint32_t currPageNum = internalNodeNumKeys(prevNode);
+    uint32_t currPageNum = *internalNodeRightChild(prevNode);
     void *currPage = getPage(table->pager, currPageNum);
 
     internalNodeInsert(table, newPageNum, currPageNum);
@@ -582,21 +584,14 @@ void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t c
 }
 
 void doSelect(InputBuffer *inputBuffer, Table *table) {
-    char *selectedRow = strtok(NULL, " ");
-    if (!isNumber(selectedRow)) {
-        printf("Invalid row\n");
-        return;
-    }
-    uint32_t rowSelected = atoi(selectedRow);
-    // if (!validRow(rowSelected, table)) {
-    //     printf("Row selected is too large\n");
-    //     return;
-    // }
+    Cursor *cursor = tableStart(table);
 
     Row row;
-    Cursor *cursor = tableStart(table);
-    deserialiseRow(cursorValue(cursor), &row);
-    printRow(&row);
+    while (!(cursor->endOfTable)) {
+        deserialiseRow(cursorValue(cursor), &row);
+        printRow(&row);
+        cursorAdvance(cursor);
+    }
 
     free(cursor);
 }
@@ -960,13 +955,29 @@ void createNewRoot(Table *table, uint32_t rightChildPageNum) {
     uint32_t leftChildPageNum = getUnusedPageNum(table->pager);
     void *leftChild = getPage(table->pager, leftChildPageNum);
 
+    if (getNodeType(root) == INTERNAL_NODE) {
+        initialiseInternalNode(rightChild);
+        initialiseInternalNode(leftChild);
+    }
+
     memcpy(leftChild, root, PAGE_SIZE);
     setNodeRoot(leftChild, false);
+
+    if (getNodeType(leftChild) == INTERNAL_NODE) {
+        void *child;
+        for (int i = 0; i < *internalNodeNumKeys(leftChild); i ++) {
+            child = getPage(table->pager, *internalNodeChild(leftChild, i));
+            *nodeParent(child) = leftChildPageNum;
+        }
+        child = getPage(table->pager, *internalNodeRightChild(leftChild));
+        *nodeParent(child) = leftChildPageNum;
+    }
+
     initialiseInternalNode(root);
     setNodeRoot(root, true);
     *internalNodeNumKeys(root) = 1;
     *internalNodeChild(root, 0) = leftChildPageNum;
-    uint32_t leftChildMaxKey = getNodeMaxKey(leftChild);
+    uint32_t leftChildMaxKey = getNodeMaxKey(table->pager, leftChild);
     *internalNodeKey(root, 0) = leftChildMaxKey;
     *internalNodeRightChild(root) = rightChildPageNum; 
     *nodeParent(leftChild) = table->rootPageNum;
@@ -1020,14 +1031,13 @@ uint32_t *internalNodeKey(void *node, uint32_t keyNum) {
     return (uint32_t *)internalNodeCell(node, keyNum) + INTERNAL_NODE_CHILD_SIZE;
 }
 
-uint32_t getNodeMaxKey(void *node) {
-    NodeType type = getNodeType(node);
-
-    if (type == INTERNAL_NODE) {
-        return *internalNodeKey(node, *internalNodeNumKeys(node) - 1);
-    } else if (type == LEAF_NODE) {
-        return *leafNodeKey(node, *leafNodenumCells(node) - 1);
+uint32_t getNodeMaxKey(Pager *pager, void *node) {
+    if (getNodeType(node) == LEAF_NODE) {
+        return (*leafNodeKey(node, *leafNodenumCells(node) - 1));
     }
+
+    void *rightChild = getPage(pager, *(uint32_t *)internalNodeRightChild(node));
+    return getNodeMaxKey(pager, rightChild);
 }
 
 bool isNodeRoot(void *node) {
