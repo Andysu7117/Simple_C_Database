@@ -719,7 +719,13 @@ void cursorAdvance(Cursor *cursor) {
 
     cursor->cellNum += 1;
     if (cursor->cellNum >= (*(uint32_t *)leafNodenumCells(node))) {
-        cursor->endOfTable = true;
+        uint32_t nextPageNum = *leafNodeNextLeaf(node);
+        if (nextPageNum == 0) {
+            cursor->endOfTable = true;
+        } else {
+            cursor->pageNum = nextPageNum;
+            cursor->cellNum = 0;
+        }
     }
 }
 
