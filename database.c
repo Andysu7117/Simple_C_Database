@@ -156,7 +156,7 @@ void databaseClose(Table* table);
 Pager *pagerOpen(char *filename);
 void pagerFlush(Pager* pager, uint32_t pageNum);
 bool insertArgsCheck(char *arg, int len);
-void printTable(Table *table);
+void printTable(Table *table, uint32_t pageNum);
 void *getPage(Pager *pager, uint32_t pageNum);
 void *cursorValue(Cursor *cursor);
 void cursorAdvance(Cursor *cursor);
@@ -192,6 +192,7 @@ void updateInternalNodeKey(void *node, uint32_t oldKey, uint32_t newKey);
 uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
+void printNodes(Cursor *cursor);
 
 
 //Program
@@ -301,7 +302,7 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table *table) {
     }  else if (strcmp(inputBuffer->input, "tree") == 0) {
         printTree(table->pager, 0, 0);
     }  else if (strcmp(inputBuffer->input, "print") == 0) {
-        printTable(table);
+        printTable(table, table->rootPageNum);
     } else { 
         char *command = strtok(inputBuffer->input, " ");
         if (strcmp(command, "insert") == 0) {
@@ -774,15 +775,42 @@ void pagerFlush(Pager* pager, uint32_t pageNum) {
   }
 }
 
-void printTable(Table *table) {
-    Cursor *cursor = tableStart(table);
+void printTable(Table *table, uint32_t pageNum) {
+    void *node = getPage(table->pager, pageNum);
+    NodeType type = getNodeType(node);
+
+    if (type == LEAF_NODE) {
+        uint32_t numCells = *leafNodenumCells(node);
+        for (uint32_t i = 0; i < numCells; i++) {
+            Row row;
+            void *value = leafNodeValue(node, i);
+            deserialiseRow(value, &row);
+            printRow(&row);
+        }
+    } else if (type == INTERNAL_NODE) {
+        uint32_t numKeys = *internalNodeNumKeys(node);
+        Cursor *cursor = tableFind(table, *internalNodeKey(node, 0));
+
+        if (numKeys > 0) {
+            for (uint32_t i = 0; i < numKeys; i++) {
+                uint32_t leftChildPageNum = *internalNodeChild(node, i);
+                printTable(table, leftChildPageNum);
+            }
+        }
+        uint32_t rightChildPageNum = *internalNodeRightChild(node);
+        printTable(table, rightChildPageNum);
+    }
+} 
+
+void printNodes(Cursor *cursor) {
     Row row;
+
     while (!(cursor->endOfTable)) {
         deserialiseRow(cursorValue(cursor), &row);
         printRow(&row);
         cursorAdvance(cursor);
     }
-} 
+}
 
 Cursor *tableStart(Table *table) {
     Cursor *cursor = malloc(sizeof(Cursor));
