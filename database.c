@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 
 
 // GLOBAL VARIABLES
@@ -630,15 +631,15 @@ void printRow(Row *row) {
 }
 
 void serialiseRow(Row *source, void *destination) {
-    memcpy((uint32_t *)destination + ID_OFFSET, &(source->id), ID_SIZE);
-    strncpy((char *)destination + USERNAME_OFFSET, source->userName, USERNAME_SIZE);
-    strncpy((char *)destination + EMAIL_OFFSET, source->email, EMAIL_SIZE);
+    memcpy((uint8_t *)destination + ID_OFFSET, &(source->id), ID_SIZE);
+    strncpy((uint8_t *)destination + USERNAME_OFFSET, source->userName, USERNAME_SIZE);
+    strncpy((uint8_t *)destination + EMAIL_OFFSET, source->email, EMAIL_SIZE);
 }
 
 void deserialiseRow(void *source, Row *destination) {
-    memcpy(&(destination->id), (uint32_t *)source + ID_OFFSET, ID_SIZE);
-    memcpy(&(destination->userName), (char *)source + USERNAME_OFFSET, USERNAME_SIZE);
-    memcpy(&(destination->email), (char *)source + EMAIL_OFFSET, EMAIL_SIZE);
+    memcpy(&(destination->id), (uint8_t *)source + ID_OFFSET, ID_SIZE);
+    memcpy(&(destination->userName), (uint8_t *)source + USERNAME_OFFSET, USERNAME_SIZE);
+    memcpy(&(destination->email), (uint8_t *)source + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
 void *getPage(Pager *pager, uint32_t pageNum) {
@@ -861,15 +862,15 @@ void cursorAdvance(Cursor *cursor) {
 }
 
 uint32_t *leafNodeNextLeaf(void *node) {
-    return ((uint32_t *)node + LEAF_NODE_NEXT_LEAF_OFFSET);
+    return (uint32_t *)((uint8_t *)node + LEAF_NODE_NEXT_LEAF_OFFSET);
 }
 
 uint32_t *leafNodenumCells(void *node) {
-    return (uint32_t *)node + LEAF_NODE_NUM_CELLS_OFFSET;
+    return (uint32_t *)((uint8_t *)node + LEAF_NODE_NUM_CELLS_OFFSET);
 }
 
 void *leafNodeCell(void *node, uint32_t cellNum) {
-    return (uint32_t *)node + LEAF_NODE_HEADER_SIZE + cellNum * LEAF_NODE_CELL_SIZE;
+    return (uint8_t *)node + LEAF_NODE_HEADER_SIZE + cellNum * LEAF_NODE_CELL_SIZE;
 }
 
 uint32_t *leafNodeKey(void *node, uint32_t cellNum) {
@@ -877,7 +878,7 @@ uint32_t *leafNodeKey(void *node, uint32_t cellNum) {
 }
 
 void *leafNodeValue(void *node, uint32_t cellNum) {
-    return (uint32_t *)leafNodeCell(node, cellNum) + LEAF_NODE_KEY_SIZE;
+    return (uint8_t *)leafNodeCell(node, cellNum) + LEAF_NODE_KEY_SIZE;
 }
 
 void initialiseLeafNode(void *node) {
@@ -897,7 +898,12 @@ void printTree(Pager *pager, uint32_t pageNum, uint32_t indentationLevel) {
     uint32_t numKeys, child;
 
     NodeType type = getNodeType(node);
-    printf("Debug: pageNum=%d, node type=%d\n", pageNum, type);
+    printf("Debug: pageNum=%d, node type=", pageNum);
+    if (type == LEAF_NODE) {
+        printf("Leaf\n");
+    } else {
+        printf("Internal\n");
+    }
 
     if (type == LEAF_NODE) {
         numKeys = *leafNodenumCells(node);
@@ -993,15 +999,15 @@ void initialiseInternalNode(void *node) {
 }
 
 uint32_t *internalNodeNumKeys(void *node) {
-    return ((uint32_t *)node + INTERNAL_NODE_NUM_KEYS_OFFSET);
+    return (uint32_t *)((uint8_t *)node + INTERNAL_NODE_NUM_KEYS_OFFSET);
 }
 
 uint32_t *internalNodeRightChild(void *node) {
-    return ((uint32_t *)node + INTERNAL_NODE_RIGHT_CHILD_OFFSET);
+    return (uint32_t *)((uint8_t *)node + INTERNAL_NODE_RIGHT_CHILD_OFFSET);
 }
 
 uint32_t *internalNodeCell(void *node, uint32_t cellNum) {
-    return ((uint32_t *)node + INTERNAL_NODE_HEADER_SIZE + cellNum * INTERNAL_NODE_CELL_SIZE);
+    return (uint32_t *)((uint8_t *)node + INTERNAL_NODE_HEADER_SIZE + cellNum * INTERNAL_NODE_CELL_SIZE);
 }
 
 uint32_t *internalNodeChild(void *node, uint32_t childNum) {
@@ -1028,7 +1034,7 @@ uint32_t *internalNodeChild(void *node, uint32_t childNum) {
 }
 
 uint32_t *internalNodeKey(void *node, uint32_t keyNum) {
-    return (uint32_t *)internalNodeCell(node, keyNum) + INTERNAL_NODE_CHILD_SIZE;
+    return (uint32_t *)((uint8_t *)internalNodeCell(node, keyNum) + INTERNAL_NODE_CHILD_SIZE);
 }
 
 uint32_t getNodeMaxKey(Pager *pager, void *node) {
@@ -1036,17 +1042,17 @@ uint32_t getNodeMaxKey(Pager *pager, void *node) {
         return (*leafNodeKey(node, *leafNodenumCells(node) - 1));
     }
 
-    void *rightChild = getPage(pager, *(uint32_t *)internalNodeRightChild(node));
+    void *rightChild = getPage(pager, *internalNodeRightChild(node));
     return getNodeMaxKey(pager, rightChild);
 }
 
 bool isNodeRoot(void *node) {
-    uint8_t value = *((uint8_t *)((uint8_t *)node + IS_ROOT_OFFSET));
+    uint8_t value = *((uint8_t *)node + IS_ROOT_OFFSET);
     return (value != 0);
 }
 
 void setNodeRoot(void *node, bool isRoot) {
     uint8_t value = isRoot;
-    *((uint8_t *)((uint8_t *)node + IS_ROOT_OFFSET)) = value;
+    *((uint8_t *)node + IS_ROOT_OFFSET) = value;
 }
 
