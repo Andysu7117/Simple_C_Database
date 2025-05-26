@@ -195,7 +195,7 @@ void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t c
 void printNodes(Cursor *cursor);
 void deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
-void doDelete(Table *table, InputBuffer *input, char *fileName);
+void doDelete( InputBuffer *input, Table *table, char *fileName);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -1088,7 +1088,7 @@ void setNodeRoot(void *node, bool isRoot) {
     *((uint8_t *)node + IS_ROOT_OFFSET) = value;
 }
 
-void doDelete(Table *table, InputBuffer *input, char *fileName) {
+void doDelete(InputBuffer *input, Table *table, char *fileName) {
     char *arg = strtok(NULL, " ");
     if (arg == NULL) {
         printf("Id missing\n");
