@@ -193,7 +193,8 @@ uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
 void printNodes(Cursor *cursor);
-
+void deleteNode(Table *table, uint32_t id, char *fileName);
+void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
 
 //Program
 int main(int argc, char *argv[]) {
