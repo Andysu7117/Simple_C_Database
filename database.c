@@ -197,9 +197,9 @@ uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
 void printNodes(Cursor *cursor);
-void deleteNode(Table *table, uint32_t id, char *fileName);
+void *deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
-void doDelete( InputBuffer *input, Table *table, char *fileName);
+Table *doDelete( InputBuffer *input, Table *table, char *fileName);
 void deleteTemp();
 
 //Program
@@ -317,7 +317,7 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName) {
         } else if (strcmp(command, "select") == 0) {
             doSelect(inputBuffer, table);
         } else if (strcmp(command, "delete") == 0) { 
-            doDelete(inputBuffer, table, fileName);
+            table = doDelete(inputBuffer, table, fileName);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
@@ -1093,65 +1093,77 @@ void setNodeRoot(void *node, bool isRoot) {
     *((uint8_t *)node + IS_ROOT_OFFSET) = value;
 }
 
-void doDelete(InputBuffer *input, Table *table, char *fileName) {
+Table *doDelete(InputBuffer *input, Table *table, char *fileName) {
     char *arg = strtok(NULL, " ");
     if (arg == NULL) {
         printf("Id missing\n");
-        return;
+        return table;
     }
 
     if (!isNumber(arg)) {
         printf("Id not a number\n");
-        return;
+        return table;
     }
 
     uint32_t id = atoi(arg);
 
     Cursor *cursor = tableFind(table, id);
     void *node = getPage(table->pager, cursor->pageNum);
-        if (*leafNodeKey(node, cursor->cellNum) != id) {
+    if (*leafNodeKey(node, cursor->cellNum) != id) {
         printf("Id not in databse\n");
-        return;
+        return table;
     }  
 
     deleteNode(table, id, fileName);
+    printf("Deleted Successfuly\n");
+    return databaseOpen(fileName);
 }
 
-void deleteNode(Table *table, uint32_t id, char *fileName) {
+void *deleteNode(Table *table, uint32_t id, char *fileName) {
     Table *tempTable = databaseOpen("temp");
-
     copyFile(table, tempTable, id, table->rootPageNum);
-
+    databaseClose(tempTable);
     FILE *tempFile = fopen("temp", "r");
     FILE *fs = fopen(fileName, "w");
 
     int c;
-
+    printf("fgetc\n");
     while ((c = fgetc(tempFile)) != EOF) {
         fputc(c, fs);
     }
 
     fclose(tempFile);
     fclose(fs);
-
-    deleteTemp();
+    // deleteTemp();
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
     void *node = getPage(table->pager, pageNum);
     NodeType type = getNodeType(node);
-
     if (type == LEAF_NODE) {
         uint32_t numCells = *leafNodenumCells(node);
         for (uint32_t i = 0; i < numCells; i++) {
             Row row;
+            Row *rowToInsert = malloc(sizeof(Row));
+            
             void *value = leafNodeValue(node, i);
-            if (*(uint32_t *)value == id) continue;
-
+            if (*(uint32_t *)value == id) {
+                free(rowToInsert);
+                continue; 
+            };
+            
             deserialiseRow(value, &row);
-            Cursor *cursor = tableFind(tempTable, *(uint32_t *)value);
-            leafNodeInsert(cursor, row.id, &row);
+            rowToInsert->id = row.id;
+            strncpy(rowToInsert->userName, row.userName, MAX_USERNAME_SIZE);
+            strncpy(rowToInsert->email, row.email, MAX_EMAIL_SIZE);
+            uint32_t keyToInsert = rowToInsert->id;
+            Cursor *cursor = tableFind(tempTable, keyToInsert);
+            leafNodeInsert(cursor, keyToInsert, rowToInsert);
+            free(rowToInsert);
+            free(cursor);
         }
+        printf("Temp is now\n");
+        printTable(tempTable, tempTable->rootPageNum);
     } else if (type == INTERNAL_NODE) {
         uint32_t numKeys = *internalNodeNumKeys(node);
         Cursor *cursor = tableFind(table, *internalNodeKey(node, 0));
@@ -1189,9 +1201,3 @@ void deleteTemp() {
         return;
     }
 }
-
-    //    int posix_spawn(pid_t *restrict pid, const char *restrict path,
-    //                    const posix_spawn_file_actions_t *restrict file_actions,
-    //                    const posix_spawnattr_t *restrict attrp,
-    //                    char *const argv[restrict],
-    //                    char *const envp[restrict]);
