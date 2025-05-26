@@ -1089,10 +1089,10 @@ void deleteNode(Table *table, uint32_t id, char *fileName) {
     FILE *tempFile = fopen("temp", "w");
     fclose(tempFile);
 
-    Table *tempTable = databaseOpen(tempFile);
+    Table *tempTable = databaseOpen("temp");
     Cursor *val = tableFind(table, id);
     void *node = getPage(table->pager, val->pageNum);
-    if (leafNodeKey(node, val->cellNum) != id) {
+    if (*leafNodeKey(node, val->cellNum) != id) {
         printf("Id not in databse\n");
         exit(EXIT_FAILURE);
     }
@@ -1113,7 +1113,7 @@ void deleteNode(Table *table, uint32_t id, char *fileName) {
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
-    void *node = getPage(table, pageNum);
+    void *node = getPage(table->pager, pageNum);
     NodeType type = getNodeType(node);
 
     if (type == LEAF_NODE) {
@@ -1121,11 +1121,11 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
         for (uint32_t i = 0; i < numCells; i++) {
             Row row;
             void *value = leafNodeValue(node, i);
-            if (value == id) continue;
+            if (*(uint32_t *)value == id) continue;
 
             deserialiseRow(value, &row);
-            Cursor *cursor = tableFind(tempTable, value);
-            leafNodeInsert(cursor, value, &row);
+            Cursor *cursor = tableFind(tempTable, *(uint32_t *)value);
+            leafNodeInsert(cursor, row.id, &row);
         }
     } else if (type == INTERNAL_NODE) {
         uint32_t numKeys = *internalNodeNumKeys(node);
