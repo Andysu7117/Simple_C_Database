@@ -11,11 +11,15 @@
 #include <errno.h>
 #include <stdint.h>
 #include <wchar.h>
+#include <unistd.h>
+#include <spawn.h>
+#include <sys/wait.h>
 
 // GLOBAL VARIABLES
 #ifdef _WIN32
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+#define pid_t int
 #endif
 
 #ifndef S_IRUSR
@@ -196,6 +200,7 @@ void printNodes(Cursor *cursor);
 void deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
 void doDelete( InputBuffer *input, Table *table, char *fileName);
+void deleteTemp();
 
 //Program
 int main(int argc, char *argv[]) {
@@ -1113,14 +1118,11 @@ void doDelete(InputBuffer *input, Table *table, char *fileName) {
 }
 
 void deleteNode(Table *table, uint32_t id, char *fileName) {
-    FILE *tempFile = fopen("temp", "w");
-    fclose(tempFile);
-
     Table *tempTable = databaseOpen("temp");
 
     copyFile(table, tempTable, id, table->rootPageNum);
 
-    tempFile = fopen("temp", "r");
+    FILE *tempFile = fopen("temp", "r");
     FILE *fs = fopen(fileName, "w");
 
     int c;
@@ -1131,6 +1133,8 @@ void deleteNode(Table *table, uint32_t id, char *fileName) {
 
     fclose(tempFile);
     fclose(fs);
+
+    deleteTemp();
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
@@ -1162,3 +1166,32 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
         copyFile(table, tempTable, id, rightChildPageNum);
     }
 }
+
+void deleteTemp() {
+    pid_t pid;
+    char *args[] = {
+        "/usr/bin/rm",
+        "temp",
+        NULL
+    };
+
+    int res = posix_spawn(&pid, args[0], NULL, NULL, args, environ);
+
+    if (res != 0) {
+        printf("Could not delete temp\n");
+        return;
+    }
+
+    int exit_status;
+
+    if (waitpid(pid, &exit_status, 0) == -1) {
+        printf("waitpid\n");
+        return;
+    }
+}
+
+    //    int posix_spawn(pid_t *restrict pid, const char *restrict path,
+    //                    const posix_spawn_file_actions_t *restrict file_actions,
+    //                    const posix_spawnattr_t *restrict attrp,
+    //                    char *const argv[restrict],
+    //                    char *const envp[restrict]);
