@@ -195,6 +195,7 @@ void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t c
 void printNodes(Cursor *cursor);
 void deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
+void doDelete(Table *table, InputBuffer *input);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -310,6 +311,8 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName) {
             doInsert(inputBuffer, table);
         } else if (strcmp(command, "select") == 0) {
             doSelect(inputBuffer, table);
+        } else if (strcmp(command, "delete") == 0) { 
+            doDelete(inputBuffer, table);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
