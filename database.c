@@ -1089,7 +1089,27 @@ void setNodeRoot(void *node, bool isRoot) {
 }
 
 void doDelete(Table *table, InputBuffer *input, char *fileName) {
+    char *arg = strtok(NULL, " ");
+    if (arg == NULL) {
+        printf("Id missing\n");
+        return;
+    }
 
+    if (!isNumber(arg)) {
+        printf("Id not a number\n");
+        return;
+    }
+
+    uint32_t id = atoi(arg);
+
+    Cursor *cursor = tableFind(table, id);
+    void *node = getPage(table->pager, cursor->pageNum);
+        if (*leafNodeKey(node, cursor->cellNum) != id) {
+        printf("Id not in databse\n");
+        return;
+    }  
+
+    deleteNode(table, id, fileName);
 }
 
 void deleteNode(Table *table, uint32_t id, char *fileName) {
@@ -1097,12 +1117,6 @@ void deleteNode(Table *table, uint32_t id, char *fileName) {
     fclose(tempFile);
 
     Table *tempTable = databaseOpen("temp");
-    Cursor *val = tableFind(table, id);
-    void *node = getPage(table->pager, val->pageNum);
-    if (*leafNodeKey(node, val->cellNum) != id) {
-        printf("Id not in databse\n");
-        exit(EXIT_FAILURE);
-    }
 
     copyFile(table, tempTable, id, table->rootPageNum);
 
