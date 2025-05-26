@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdint.h>
-
+#include <wchar.h>
 
 // GLOBAL VARIABLES
 #ifdef _WIN32
@@ -1084,3 +1084,38 @@ void setNodeRoot(void *node, bool isRoot) {
     *((uint8_t *)node + IS_ROOT_OFFSET) = value;
 }
 
+void deleteNode(Table *table, uint32_t id) {
+    FILE *tempFile = fopen("temp", "w");
+    fclose(tempFile);
+
+    Table *tempTable = databaseOpen(tempFile);
+    Cursor *val = tableFind(table, id);
+    void *node = getPage(table->pager, val->pageNum);
+    if (leafNodeKey(node, val->cellNum) != id) {
+        printf("Id not in databse\n");
+        exit(EXIT_FAILURE);
+    }
+
+    copyFile(table, tempTable, id, table->rootPageNum);
+}
+
+void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
+    void *node = getPage(table, pageNum);
+    NodeType type = getNodeType(node);
+
+    if (type == LEAF_NODE) {
+        uint32_t numCells = *leafNodenumCells(node);
+        for (uint32_t i = 0; i < numCells; i++) {
+            Row row;
+            void *value = leafNodeValue(node, i);
+            if (value == id) continue;
+
+            deserialiseRow(value, &row);
+            Cursor *cursor = tableFind(tempTable, value);
+            leafNodeInsert(cursor, value, &row);
+        }
+    } else if (type == INTERNAL_NODE) {
+        uint32_t numKeys = *internalNodeNumKeys(node);
+        Cursor *cursor = tableFind(table, *internalNodeKey(node, 0));
+    }
+}
