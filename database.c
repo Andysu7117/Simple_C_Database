@@ -140,7 +140,7 @@ InputBuffer *NewInputBuffer();
 void readInput(InputBuffer *inputBuffer);
 void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
-void readAndDoCommand(InputBuffer *inputBuffer, Table *table);
+void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName);
 void doInsert(InputBuffer *inputBuffer, Table *table);
 void leafNodeInsert(Cursor *cursor, uint32_t key, Row *value);
 void doSelect(InputBuffer *inputBuffer, Table *table);
@@ -209,7 +209,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         printPrompt();
         readInput(inputBuffer);
-        readAndDoCommand(inputBuffer, table);
+        readAndDoCommand(inputBuffer, table, fileName);
     }
 
     return 0;
@@ -290,7 +290,7 @@ void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer);
 }
 
-void readAndDoCommand(InputBuffer *inputBuffer, Table *table) {   
+void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName) {   
     if (strcmp(inputBuffer->input, "exit") == 0) {
         printf("Closing...\n");
         closeInput(inputBuffer);
@@ -1084,7 +1084,7 @@ void setNodeRoot(void *node, bool isRoot) {
     *((uint8_t *)node + IS_ROOT_OFFSET) = value;
 }
 
-void deleteNode(Table *table, uint32_t id) {
+void deleteNode(Table *table, uint32_t id, char *fileName) {
     FILE *tempFile = fopen("temp", "w");
     fclose(tempFile);
 
@@ -1097,6 +1097,18 @@ void deleteNode(Table *table, uint32_t id) {
     }
 
     copyFile(table, tempTable, id, table->rootPageNum);
+
+    tempFile = fopen("temp", "r");
+    FILE *fs = fopen(fileName, "w");
+
+    int c;
+
+    while ((c = fgetc(tempFile)) != EOF) {
+        fputc(c, fs);
+    }
+
+    fclose(tempFile);
+    fclose(fs);
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
@@ -1117,5 +1129,14 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
     } else if (type == INTERNAL_NODE) {
         uint32_t numKeys = *internalNodeNumKeys(node);
         Cursor *cursor = tableFind(table, *internalNodeKey(node, 0));
+
+        if (numKeys > 0) {
+            for (uint32_t i = 0; i < numKeys; i++) {
+                uint32_t leftChildPageNum = *internalNodeChild(node, i);
+                copyFile(table, tempTable, id, leftChildPageNum);
+            }
+        }
+        uint32_t rightChildPageNum = *internalNodeRightChild(node);
+        copyFile(table, tempTable, id, rightChildPageNum);
     }
 }
