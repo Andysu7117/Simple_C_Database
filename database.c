@@ -195,7 +195,7 @@ void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t c
 void printNodes(Cursor *cursor);
 void deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
-void doDelete(Table *table, InputBuffer *input);
+void doDelete(Table *table, InputBuffer *input, char *fileName);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -312,7 +312,7 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName) {
         } else if (strcmp(command, "select") == 0) {
             doSelect(inputBuffer, table);
         } else if (strcmp(command, "delete") == 0) { 
-            doDelete(inputBuffer, table);
+            doDelete(inputBuffer, table, fileName);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
@@ -1086,6 +1086,10 @@ bool isNodeRoot(void *node) {
 void setNodeRoot(void *node, bool isRoot) {
     uint8_t value = isRoot;
     *((uint8_t *)node + IS_ROOT_OFFSET) = value;
+}
+
+void doDelete(Table *table, InputBuffer *input, char *fileName) {
+
 }
 
 void deleteNode(Table *table, uint32_t id, char *fileName) {
