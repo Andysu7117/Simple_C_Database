@@ -197,10 +197,10 @@ uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
 void printNodes(Cursor *cursor);
-void *deleteNode(Table *table, uint32_t id, char *fileName);
+void *deleteNode(Table **tablePtr, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited);
 Table *doDelete( InputBuffer *input, Table *table, char *fileName);
-void deleteTemp();
+void deleteFile(char *path);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -749,7 +749,7 @@ Pager *pagerOpen(char *filename) {
     Pager *pager = malloc(sizeof(Pager));
     pager->fileDescriptor = fd;
     pager->fileLength = fileLength;
-    pager->numPages = (fileLength / PAGE_SIZE);
+    pager->numPages = (fileLength + PAGE_SIZE - 1) / PAGE_SIZE;
 
     if (fileLength % PAGE_SIZE != 0) {
         printf("Db file is not a whole number of pages. Corrupt file\n");
@@ -1114,17 +1114,19 @@ Table *doDelete(InputBuffer *input, Table *table, char *fileName) {
         return table;
     }  
 
-    deleteNode(table, id, fileName);
+    deleteNode(&table, id, fileName);
     printf("Deleted Successfuly\n");
-    return databaseOpen(fileName);
+    return table;
 }
 
-void *deleteNode(Table *table, uint32_t id, char *fileName) {
+void *deleteNode(Table **tablePtr, uint32_t id, char *fileName) {
+    Table *table = *tablePtr;
     Table *tempTable = databaseOpen("temp");
     bool *visisted = malloc(TABLE_MAX_PAGES * sizeof(bool));
     memset(visisted, false, TABLE_MAX_PAGES * sizeof(bool));
     copyFile(table, tempTable, id, table->rootPageNum, visisted);
     databaseClose(tempTable);
+    databaseClose(table);
     FILE *tempFile = fopen("temp", "r");
     FILE *fs = fopen(fileName, "w");
 
@@ -1136,7 +1138,10 @@ void *deleteNode(Table *table, uint32_t id, char *fileName) {
 
     fclose(tempFile);
     fclose(fs);
-    // deleteTemp();
+
+    deleteFile(temp);
+
+    *tablePtr = databaseOpen(fileName);
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited) {
@@ -1185,11 +1190,11 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, boo
     }
 }
 
-void deleteTemp() {
+void deleteFile(char *path) {
     pid_t pid;
     char *args[] = {
         "/usr/bin/rm",
-        "temp",
+        path,
         NULL
     };
 
