@@ -144,7 +144,7 @@ InputBuffer *NewInputBuffer();
 void readInput(InputBuffer *inputBuffer);
 void closeInput(InputBuffer *InputBuffer);
 ssize_t getLine(char **linePtr, size_t *n, FILE *stream);
-void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName);
+void readAndDoCommand(InputBuffer *inputBuffer, Table **tablePtr, char *fileName);
 void doInsert(InputBuffer *inputBuffer, Table *table);
 void leafNodeInsert(Cursor *cursor, uint32_t key, Row *value);
 void doSelect(InputBuffer *inputBuffer, Table *table);
@@ -197,12 +197,10 @@ uint32_t internalNodeFindChild(void *node, uint32_t key);
 void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPageNum);
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
 void printNodes(Cursor *cursor);
-void *deleteNode(Table **tablePtr, uint32_t id, char *fileName);
+Table *deleteNode(Table *table, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited);
 Table *doDelete( InputBuffer *input, Table *table, char *fileName);
 void deleteFile(char *path);
-Table *databaseOpenForDel(char *fileName);
-Pager *pagerOpenForDel(char *filename);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -218,7 +216,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         printPrompt();
         readInput(inputBuffer);
-        readAndDoCommand(inputBuffer, table, fileName);
+        readAndDoCommand(inputBuffer, &table, fileName);
     }
 
     return 0;
@@ -299,27 +297,28 @@ void closeInput(InputBuffer *inputBuffer) {
     free(inputBuffer);
 }
 
-void readAndDoCommand(InputBuffer *inputBuffer, Table *table, char *fileName) {   
+void readAndDoCommand(InputBuffer *inputBuffer, Table **tablePtr, char *fileName) {   
     if (strcmp(inputBuffer->input, "exit") == 0) {
         printf("Closing...\n");
         closeInput(inputBuffer);
-        databaseClose(table);
+        databaseClose(*tablePtr);
         printf("Successfully closed\n");
         exit(EXIT_SUCCESS);
     } else if (strcmp(inputBuffer->input, "help") == 0) {
         printCommands();
     }  else if (strcmp(inputBuffer->input, "tree") == 0) {
-        printTree(table->pager, 0, 0);
+        printTree((*tablePtr)->pager, 0, 0);
     }  else if (strcmp(inputBuffer->input, "print") == 0) {
-        printTable(table, table->rootPageNum);
+        printTable(*tablePtr, (*tablePtr)->rootPageNum);
     } else { 
         char *command = strtok(inputBuffer->input, " ");
         if (strcmp(command, "insert") == 0) {
-            doInsert(inputBuffer, table);
+            doInsert(inputBuffer, *tablePtr);
         } else if (strcmp(command, "select") == 0) {
-            doSelect(inputBuffer, table);
+            doSelect(inputBuffer, *tablePtr);
         } else if (strcmp(command, "delete") == 0) { 
-            table = doDelete(inputBuffer, table, fileName);
+            *tablePtr = doDelete(inputBuffer, *tablePtr, fileName);
+            printf("Returned new table: fd=%d\n", (*tablePtr)->pager->fileDescriptor);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
@@ -1123,13 +1122,12 @@ Table *doDelete(InputBuffer *input, Table *table, char *fileName) {
         return table;
     }  
 
-    deleteNode(&table, id, fileName);
+    table = deleteNode(table, id, fileName);
     printf("Deleted Successfuly\n");
     return table;
 }
 
-void *deleteNode(Table **tablePtr, uint32_t id, char *fileName) {
-    Table *table = *tablePtr;
+Table *deleteNode(Table *table, uint32_t id, char *fileName) {
     Table *tempTable = databaseOpen("temp");
     bool *visisted = malloc(TABLE_MAX_PAGES * sizeof(bool));
     memset(visisted, false, TABLE_MAX_PAGES * sizeof(bool));
@@ -1138,6 +1136,7 @@ void *deleteNode(Table **tablePtr, uint32_t id, char *fileName) {
 
     databaseClose(tempTable);
     databaseClose(table);
+
     int tempFd = open("temp", O_RDONLY);
     if (tempFd == -1) {
         perror("open temp failed");
@@ -1164,7 +1163,7 @@ void *deleteNode(Table **tablePtr, uint32_t id, char *fileName) {
 
     deleteFile("temp");
 
-    *tablePtr = databaseOpen(fileName);
+    return databaseOpen(fileName);
 }
 
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited) {
