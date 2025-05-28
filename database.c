@@ -201,6 +201,8 @@ void *deleteNode(Table **tablePtr, uint32_t id, char *fileName);
 void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited);
 Table *doDelete( InputBuffer *input, Table *table, char *fileName);
 void deleteFile(char *path);
+Table *databaseOpenForDel(char *fileName);
+Pager *pagerOpenForDel(char *filename);
 
 //Program
 int main(int argc, char *argv[]) {
@@ -339,6 +341,10 @@ void doInsert(InputBuffer *inputBuffer, Table *table) {
         len++;
     }
 
+    if (len < 3) {
+        printf("Not enough arguments\n");
+        return;
+    }
     Row *rowToInsert = malloc(sizeof(Row));
     rowToInsert->id = atoi(insert_args[0]);
     strncpy(rowToInsert->userName, insert_args[1], MAX_USERNAME_SIZE);
@@ -739,6 +745,9 @@ void databaseClose(Table* table) {
 Pager *pagerOpen(char *filename) {
     int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 
+    printf("Opening pager for file %s\n", filename);
+    printf("fd: %d\n", fd);
+
     if (fd == -1) {
         printf("Unable to open file\n");
         exit(EXIT_FAILURE);
@@ -749,7 +758,7 @@ Pager *pagerOpen(char *filename) {
     Pager *pager = malloc(sizeof(Pager));
     pager->fileDescriptor = fd;
     pager->fileLength = fileLength;
-    pager->numPages = (fileLength + PAGE_SIZE - 1) / PAGE_SIZE;
+    pager->numPages = (fileLength / PAGE_SIZE);
 
     if (fileLength % PAGE_SIZE != 0) {
         printf("Db file is not a whole number of pages. Corrupt file\n");
@@ -770,7 +779,7 @@ void pagerFlush(Pager* pager, uint32_t pageNum) {
     }
 
     off_t offset = lseek(pager->fileDescriptor, pageNum * PAGE_SIZE, SEEK_SET);
-
+    printf("closing fd %d\n", pager->fileDescriptor);
     if (offset == -1) {
         printf("Error seeking: %d\n", errno);
         exit(EXIT_FAILURE);
@@ -1125,21 +1134,35 @@ void *deleteNode(Table **tablePtr, uint32_t id, char *fileName) {
     bool *visisted = malloc(TABLE_MAX_PAGES * sizeof(bool));
     memset(visisted, false, TABLE_MAX_PAGES * sizeof(bool));
     copyFile(table, tempTable, id, table->rootPageNum, visisted);
+    free(visisted);
+
     databaseClose(tempTable);
     databaseClose(table);
-    FILE *tempFile = fopen("temp", "r");
-    FILE *fs = fopen(fileName, "w");
-
-    int c;
-    printf("fgetc\n");
-    while ((c = fgetc(tempFile)) != EOF) {
-        fputc(c, fs);
+    int tempFd = open("temp", O_RDONLY);
+    if (tempFd == -1) {
+        perror("open temp failed");
+        exit(EXIT_FAILURE);
     }
 
-    fclose(tempFile);
-    fclose(fs);
+    int outFd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    if (outFd == -1) {
+        perror("open output failed");
+        exit(EXIT_FAILURE);
+    }
 
-    deleteFile(temp);
+    char buffer[PAGE_SIZE];
+    ssize_t bytesRead;
+    while ((bytesRead = read(tempFd, buffer, PAGE_SIZE)) > 0) {
+        if (write(outFd, buffer, bytesRead) != bytesRead) {
+            perror("write failed");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    close(tempFd);
+    close(outFd);
+
+    deleteFile("temp");
 
     *tablePtr = databaseOpen(fileName);
 }
