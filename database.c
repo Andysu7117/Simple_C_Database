@@ -318,7 +318,6 @@ void readAndDoCommand(InputBuffer *inputBuffer, Table **tablePtr, char *fileName
             doSelect(inputBuffer, *tablePtr);
         } else if (strcmp(command, "delete") == 0) { 
             *tablePtr = doDelete(inputBuffer, *tablePtr, fileName);
-            printf("Returned new table: fd=%d\n", (*tablePtr)->pager->fileDescriptor);
         } else {
             printf("Unrecognised Command %s\n", command);
         } 
@@ -744,9 +743,6 @@ void databaseClose(Table* table) {
 Pager *pagerOpen(char *filename) {
     int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 
-    printf("Opening pager for file %s\n", filename);
-    printf("fd: %d\n", fd);
-
     if (fd == -1) {
         printf("Unable to open file\n");
         exit(EXIT_FAILURE);
@@ -778,7 +774,6 @@ void pagerFlush(Pager* pager, uint32_t pageNum) {
     }
 
     off_t offset = lseek(pager->fileDescriptor, pageNum * PAGE_SIZE, SEEK_SET);
-    printf("closing fd %d\n", pager->fileDescriptor);
     if (offset == -1) {
         printf("Error seeking: %d\n", errno);
         exit(EXIT_FAILURE);
@@ -1173,8 +1168,6 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, boo
     visited[pageNum] = true;
     void *node = getPage(table->pager, pageNum);
     NodeType type = getNodeType(node);
-    printf("Visiting page %u\n", pageNum);
-    printf("Debug: pageNum=%d, node type=", pageNum);
     if (type == LEAF_NODE) {
         uint32_t numCells = *leafNodenumCells(node);
         for (uint32_t i = 0; i < numCells; i++) {
@@ -1182,8 +1175,6 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, boo
             Row *rowToInsert = malloc(sizeof(Row));
             void *value = leafNodeValue(node, i);
             deserialiseRow(value, &row);
-            printf("Copying: ");
-            printRow(&row);
             if (row.id == id) {
                 free(rowToInsert);
                 continue; 
