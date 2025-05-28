@@ -198,7 +198,7 @@ void internalNodeInsert(Table *table, uint32_t parentPagenum, uint32_t childPage
 void internalNodeSplitAndInsert(Table *table, uint32_t parentPageNum, uint32_t childPageNum);
 void printNodes(Cursor *cursor);
 void *deleteNode(Table *table, uint32_t id, char *fileName);
-void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum);
+void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited);
 Table *doDelete( InputBuffer *input, Table *table, char *fileName);
 void deleteTemp();
 
@@ -1121,7 +1121,9 @@ Table *doDelete(InputBuffer *input, Table *table, char *fileName) {
 
 void *deleteNode(Table *table, uint32_t id, char *fileName) {
     Table *tempTable = databaseOpen("temp");
-    copyFile(table, tempTable, id, table->rootPageNum);
+    bool *visisted = malloc(TABLE_MAX_PAGES * sizeof(bool));
+    memset(visisted, false, TABLE_MAX_PAGES * sizeof(bool));
+    copyFile(table, tempTable, id, table->rootPageNum, visisted);
     databaseClose(tempTable);
     FILE *tempFile = fopen("temp", "r");
     FILE *fs = fopen(fileName, "w");
@@ -1137,22 +1139,29 @@ void *deleteNode(Table *table, uint32_t id, char *fileName) {
     // deleteTemp();
 }
 
-void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
+void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum, bool *visited) {
+    if (visited[pageNum]) {
+        return;
+    }
+    visited[pageNum] = true;
     void *node = getPage(table->pager, pageNum);
     NodeType type = getNodeType(node);
+    printf("Visiting page %u\n", pageNum);
+    printf("Debug: pageNum=%d, node type=", pageNum);
     if (type == LEAF_NODE) {
         uint32_t numCells = *leafNodenumCells(node);
         for (uint32_t i = 0; i < numCells; i++) {
             Row row;
             Row *rowToInsert = malloc(sizeof(Row));
-            
             void *value = leafNodeValue(node, i);
-            if (*(uint32_t *)value == id) {
+            deserialiseRow(value, &row);
+            printf("Copying: ");
+            printRow(&row);
+            if (row.id == id) {
                 free(rowToInsert);
                 continue; 
             };
             
-            deserialiseRow(value, &row);
             rowToInsert->id = row.id;
             strncpy(rowToInsert->userName, row.userName, MAX_USERNAME_SIZE);
             strncpy(rowToInsert->email, row.email, MAX_EMAIL_SIZE);
@@ -1162,20 +1171,17 @@ void copyFile(Table *table, Table *tempTable, uint32_t id, uint32_t pageNum) {
             free(rowToInsert);
             free(cursor);
         }
-        printf("Temp is now\n");
-        printTable(tempTable, tempTable->rootPageNum);
     } else if (type == INTERNAL_NODE) {
         uint32_t numKeys = *internalNodeNumKeys(node);
-        Cursor *cursor = tableFind(table, *internalNodeKey(node, 0));
 
         if (numKeys > 0) {
             for (uint32_t i = 0; i < numKeys; i++) {
                 uint32_t leftChildPageNum = *internalNodeChild(node, i);
-                copyFile(table, tempTable, id, leftChildPageNum);
+                copyFile(table, tempTable, id, leftChildPageNum, visited);
             }
         }
         uint32_t rightChildPageNum = *internalNodeRightChild(node);
-        copyFile(table, tempTable, id, rightChildPageNum);
+        copyFile(table, tempTable, id, rightChildPageNum, visited);
     }
 }
 
